@@ -1,0 +1,12 @@
+# build output
+/build/
+/dist/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# files the trainers create next to themselves in the game folder
+*.log
+TrilogyTrainer.*.ini
