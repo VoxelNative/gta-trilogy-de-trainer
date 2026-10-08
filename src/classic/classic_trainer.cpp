@@ -855,7 +855,7 @@ void SettingsMenu()
     menu::Info("Vehicle boost / stop / jump",
                KeyName(g_keys.boost) + " / " + KeyName(g_keys.stop) + " / " + KeyName(g_keys.jump));
     menu::Info("Change the keys in", "TrilogyTrainer." GAME_SHORT ".ini");
-    menu::Info("Version", "1.1 for game build 1.112");
+    menu::Info("Version", "1.2 for game build 1.112");
 }
 
 void MainMenu()
