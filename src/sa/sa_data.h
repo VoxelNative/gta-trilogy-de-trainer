@@ -110,7 +110,6 @@ inline const CheatInfo kStatCheats[] = {
     {81, "Max sex appeal"}, {83, "Hitman level, all weapons"}, {84, "Max vehicle skills"}, {38, "Max gambling skill"},
 };
 inline const CheatInfo kWeaponCheats[] = {
-    {0, "Weapon set 1 (thug)"}, {1, "Weapon set 2 (professional)"}, {2, "Weapon set 3 (nutter)"},
     {73, "Infinite ammo, no reload (game cheat)"}, {64, "Get parachute"}, {65, "Get jetpack"},
     {77, "Recruit anyone (pistols)"}, {78, "Recruit anyone (AK-47s)"}, {79, "Recruit anyone (rockets)"},
 };

@@ -49,6 +49,10 @@ constexpr uintptr_t StatsInt = 0x522C890;      // int CStats::StatTypesInt[] (id
 constexpr uintptr_t StatsChanged = 0x117EF60;  // void (bool), called by the game after every stat cheat
 constexpr uintptr_t StatUpdated = 0x117A7E0;   // void (uint16 stat)
 constexpr uintptr_t RebuildPlayer = 0x103ADD0; // void CClothes::RebuildPlayer(CPlayerPed*, bool)
+// CCheat::WeaponCheat1-3. They sit 11 entries before CheatTable; the three slots at CheatTable[0..2] are
+// unrelated flag toggles, which the menu used to flip by mistake (WeaponSetFlags).
+constexpr uintptr_t WeaponSets[3] = {0x107D600, 0x107D940, 0x107DC40};
+constexpr uintptr_t WeaponSetFlags = 0x572BD4B; // uint8[3]
 } // namespace addr
 
 namespace off
@@ -376,6 +380,13 @@ void HotkeyFrame(void* ped)
 
 void PerFrame()
 {
+    static bool cleaned = false;
+    if (!cleaned)
+    {
+        // Undo the flags that version 1.1's weapon-set rows switched on by mistake.
+        for (int i = 0; i < 3; i++) At<uint8_t>(addr::WeaponSetFlags + i) = 0;
+        cleaned = true;
+    }
     void* ped = PlayerPed();
     if (!ped) return;
     g_sprint.Apply();
@@ -696,6 +707,18 @@ void WeaponsMenu()
     menu::Submenu("Give weapon", GiveWeaponMenu);
     menu::Toggle("Infinite ammo", &s.infAmmo, "Keeps your ammo topped up. You still reload.");
     menu::Toggle("Fast reload", &g_fastReload.on, "Reload much faster (a side-mission reward).");
+    static const char* const kSets[3] = {"Weapon set 1 (thug)", "Weapon set 2 (professional)", "Weapon set 3 (nutter)"};
+    for (int i = 0; i < 3; i++)
+        if (menu::Action(kSets[i], "The game's weapon cheat: a full set of weapons with ammo."))
+        {
+            uintptr_t fn = addr::WeaponSets[i];
+            const char* name = kSets[i];
+            Post([fn, name] {
+                if (!PlayerPed()) return;
+                Fn<void (*)()>(fn)();
+                menu::Notify("%s", name);
+            });
+        }
     CheatRows(kWeaponCheats, (int)std::size(kWeaponCheats));
 }
 
