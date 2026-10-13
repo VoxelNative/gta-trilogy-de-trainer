@@ -112,8 +112,17 @@ void* PlayerVehicle(void* ped)
     return Field<void*>(ped, off::Vehicle);
 }
 
-float MaxHealth() { return off::MaxHealth < 0 ? 100.0f : (float)std::max(100, (int)PlayerInfo()[off::MaxHealth]); }
-float MaxArmor() { return off::MaxArmor < 0 ? 100.0f : (float)std::max(100, (int)PlayerInfo()[off::MaxArmor]); }
+// GTA III has no max health / armour of its own (always 100), so the trainer keeps its own values there.
+int g_maxHealth = 100, g_maxArmor = 100;
+
+float MaxHealth()
+{
+    return off::MaxHealth < 0 ? (float)g_maxHealth : (float)std::max(100, (int)PlayerInfo()[off::MaxHealth]);
+}
+float MaxArmor()
+{
+    return off::MaxArmor < 0 ? (float)g_maxArmor : (float)std::max(100, (int)PlayerInfo()[off::MaxArmor]);
+}
 int& Money() { return *reinterpret_cast<int*>(PlayerInfo() + off::Money); }
 float* PosOf(void* e) { return &Field<float>(e, kPos); }
 
@@ -567,6 +576,24 @@ void Cheat(const CheatInfo& c)
     });
 }
 
+void SetMaxHealth(int hp)
+{
+    Post([hp] {
+        if (off::MaxHealth >= 0) PlayerInfo()[off::MaxHealth] = (uint8_t)hp;
+        else g_maxHealth = hp;
+        if (void* ped = PlayerPed()) Field<float>(ped, off::Health) = (float)hp;
+    });
+}
+
+void SetMaxArmor(int armor)
+{
+    Post([armor] {
+        if (off::MaxArmor >= 0) PlayerInfo()[off::MaxArmor] = (uint8_t)armor;
+        else g_maxArmor = armor;
+        if (void* ped = PlayerPed()) Field<float>(ped, off::Armor) = (float)armor;
+    });
+}
+
 void RepairVehicle()
 {
     Post([] {
@@ -660,6 +687,14 @@ void PlayerMenu()
     }
     menu::Toggle("God mode", &s.god, "Keeps your health full every frame.");
     menu::Toggle("Infinite armor", &s.armor);
+#if defined(GAME_III)
+    const char* maxHelp = "Left/Right to change. Health pickups still stop at 100; god mode and refills use this.";
+#else
+    const char* maxHelp = "Left/Right to change. Also fills it up.";
+#endif
+    int maxHealth = (int)MaxHealth(), maxArmor = (int)MaxArmor();
+    if (menu::Int("Max health", &maxHealth, 100, 255, 5, maxHelp)) SetMaxHealth(maxHealth);
+    if (menu::Int("Max armour", &maxArmor, 100, 255, 5, maxHelp)) SetMaxArmor(maxArmor);
     menu::Toggle("Infinite stamina", &g_sprint.on, "Sprint forever (the Paramedic mission reward).");
     if (off::Fireproof >= 0) menu::Toggle("Fireproof", &g_fireproof.on, "You can't be set on fire.");
     menu::Toggle("Never wanted", &s.neverWanted, "Clears your wanted level every frame.");

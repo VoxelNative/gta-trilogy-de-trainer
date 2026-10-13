@@ -66,7 +66,9 @@ constexpr uintptr_t VehHealth = 0x79C, VtblFix = 0x1C8;
 constexpr uintptr_t MoveSpeed = 0x7C, TurnSpeed = 0x88; // CPhysical velocity, in units per 1/50 s
 constexpr uintptr_t VtblTeleport = 0x70;                // CEntity::Teleport(CVector*, bool)
 constexpr uintptr_t VehColour = 0x67C;                  // uint8 primary, secondary, tertiary, quaternary
-constexpr uintptr_t PedState = 0x5FC;
+constexpr uintptr_t PedState = 0x5FC, PedMaxHealth = 0x770;
+constexpr int StatMaxHealth = 24;
+constexpr float MaxHealthPerStat = 0.22f; // CPlayerInfo::Process: max health = STAT_MAX_HEALTH x 0.22, every frame
 constexpr int InfoNoTired = 0x180, InfoFastReload = 0x181, InfoFireproof = 0x182; // script-command perks
 constexpr int RadarTraceCount = 250, RadarTraceStride = 0x30;
 } // namespace off
@@ -485,6 +487,28 @@ void PaintVehicle(int c1, int c2)
     });
 }
 
+// Max health comes from the max-health stat (the game recalculates it every frame); max armour is a plain value.
+void SetMaxHealth(int hp)
+{
+    Post([hp] {
+        SetStat(off::StatMaxHealth, (hp + 0.5f) / off::MaxHealthPerStat);
+        PlayerInfo()[off::InfoMaxHealth] = (uint8_t)hp;
+        if (void* ped = PlayerPed())
+        {
+            Field<float>(ped, off::PedMaxHealth) = (float)hp;
+            Field<float>(ped, off::PedHealth) = (float)hp;
+        }
+    });
+}
+
+void SetMaxArmor(int armor)
+{
+    Post([armor] {
+        PlayerInfo()[off::InfoMaxArmor] = (uint8_t)armor;
+        if (void* ped = PlayerPed()) Field<float>(ped, off::PedArmor) = (float)armor;
+    });
+}
+
 void ChangeStat(int id, int value)
 {
     Post([id, value] {
@@ -608,6 +632,11 @@ void PlayerMenu()
     }
     menu::Toggle("God mode", &s.god, "Keeps your health full every frame.");
     menu::Toggle("Infinite armor", &s.armor);
+    int maxHealth = (int)MaxHealth(), maxArmor = (int)MaxArmor();
+    if (menu::Int("Max health", &maxHealth, 100, 255, 5, "Left/Right to change. Also fills your health."))
+        SetMaxHealth(maxHealth);
+    if (menu::Int("Max armour", &maxArmor, 100, 255, 5, "Left/Right to change. Also fills your armour."))
+        SetMaxArmor(maxArmor);
     menu::Toggle("Infinite stamina", &g_sprint.on, "Sprint forever (the Paramedic mission reward).");
     menu::Toggle("Fireproof", &g_fireproof.on, "You can't be set on fire (the Firefighter reward).");
     if (menu::Toggle("Never wanted", &s.neverWanted, "Clears your wanted level every frame.") && !s.neverWanted)
