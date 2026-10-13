@@ -51,7 +51,8 @@ time it runs. Use names like `F7`, `Insert`, `Home`, `Num5`, `ADD`, `SUBTRACT`, 
 
 **All three games**
 
-- **Player**: god mode, infinite armor, infinite stamina, never wanted, set wanted level, refill health and armor,
+- **Player**: god mode, infinite armor, max health and max armour (up to 255), infinite stamina, never wanted,
+  set wanted level, refill health and armor,
   add money, the game's player cheats, on-screen coordinates
 - **Vehicles**: spawn any vehicle by category, vehicle god mode, auto-repair, repair, flip upright, repaint,
   speed boost / stop / jump keys, speedometer, the game's vehicle cheats
