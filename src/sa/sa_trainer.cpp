@@ -12,6 +12,7 @@
 #include "../core/log.h"
 #include "../core/menu.h"
 #include "../core/render.h"
+#include "../version.h"
 #include "sa_data.h"
 
 using namespace core;
@@ -836,7 +837,7 @@ void SettingsMenu()
     menu::Info("Vehicle boost / stop / jump",
                KeyName(g_keys.boost) + " / " + KeyName(g_keys.stop) + " / " + KeyName(g_keys.jump));
     menu::Info("Change the keys in", "TrilogyTrainer.SA.ini");
-    menu::Info("Version", "1.3 for game build 1.112");
+    menu::Info("Version", TRAINER_VERSION_STR " for game build 1.112");
 }
 
 void MainMenu()
