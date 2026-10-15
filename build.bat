@@ -20,7 +20,8 @@ set LIBS=user32.lib gdi32.lib d3d11.lib d3d12.lib dxgi.lib d3dcompiler.lib
 rem ---- ASI loader (version.dll) ----
 ml64 /nologo /c /Fobuild\obj\version_stubs.obj src\loader\version_stubs.asm || exit /b 1
 cl %CFLAGS% /c /Fobuild\obj\version_proxy.obj src\loader\version_proxy.cpp || exit /b 1
-link /nologo /DLL /DEF:src\loader\version.def /OUT:build\version.dll build\obj\version_proxy.obj build\obj\version_stubs.obj kernel32.lib || exit /b 1
+rc /nologo /fo build\obj\version.res src\loader\version.rc || exit /b 1
+link /nologo /DLL /DEF:src\loader\version.def /OUT:build\version.dll build\obj\version_proxy.obj build\obj\version_stubs.obj build\obj\version.res kernel32.lib || exit /b 1
 
 rem ---- shared code (ImGui, MinHook, core) ----
 set SHARED=%IMGUI%\imgui.cpp %IMGUI%\imgui_draw.cpp %IMGUI%\imgui_tables.cpp %IMGUI%\imgui_widgets.cpp ^

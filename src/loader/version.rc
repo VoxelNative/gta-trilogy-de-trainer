@@ -1,0 +1,33 @@
+// File details for the ASI loader, so Windows (and antivirus software) can tell what this DLL is.
+#include <winver.h>
+#include "../version.h"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION TRAINER_VERSION_NUM
+PRODUCTVERSION TRAINER_VERSION_NUM
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_DLL
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "VoxelNative"
+            VALUE "FileDescription", "GTA Trilogy DE Trainer - ASI mod loader"
+            VALUE "FileVersion", TRAINER_VERSION_STR
+            VALUE "InternalName", "TrilogyTrainer ASI loader"
+            VALUE "OriginalFilename", "version.dll"
+            VALUE "ProductName", "GTA Trilogy DE Trainer"
+            VALUE "ProductVersion", TRAINER_VERSION_STR
+            VALUE "LegalCopyright", TRAINER_COPYRIGHT
+            VALUE "Comments", "Open-source mod loader for GTA: The Trilogy - The Definitive Edition. Loads .asi mods and forwards the Windows version.dll API. Source: " TRAINER_URL
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
