@@ -40,7 +40,7 @@ constexpr uintptr_t LoadAllRequested = 0x11845A0; // void CStreaming::LoadAllReq
 constexpr uintptr_t UpdateColours = 0x11E2F50;  // void (CVehicle*): pushes new paint to the renderer
 constexpr uintptr_t ChangePlayerModel = 0x10A9930; // void (const char* modelName), used by the skin cheats
 constexpr uintptr_t FixAutomobile = 0x11B8730;  // void CAutomobile::Fix(CAutomobile*), what the Pay 'n' Spray calls
-constexpr uintptr_t VehiclePool = 0x545DE30;    // CPool<CVehicle>*: objects, in-use flags, size; 0x7B8 per vehicle
+constexpr uintptr_t VehiclePool = 0x545DE30;    // CPool<CVehicle>*: objects, in-use flags, size
 constexpr uintptr_t ModelInfo = 0x517B170;      // CBaseModelInfo* ms_modelInfoPtrs[], name at +8
 constexpr uintptr_t PedTypes = 0x5123660;       // CPedType* ms_apPedType[17], threat mask at +0x18
 } // namespace addr
@@ -55,6 +55,9 @@ constexpr int WeaponCount = 10;
 constexpr uintptr_t VehHealth = 0x320, VehType = 0x3DC;
 constexpr uintptr_t MoveSpeed = 0xFC, VehColour = 0x290;
 constexpr int BlipCount = 75, BlipStride = 0x38, BlipInUse = 0x27, BlipWaypoint = 0x36;
+constexpr int VehSize = 0x7B8;
+// Bits SET_CAR_PROOFS sets in the flags at +0x6C: bullet, fire, explosion, collision, melee.
+constexpr uint32_t ProofBits = (1u << 25) | (1u << 26) | (1u << 17) | (1u << 27) | (1u << 28);
 } // namespace off
 constexpr int kChaosForStars[7] = {0, 70, 200, 570, 1220, 2420, 4820};
 #elif defined(GAME_III)
@@ -78,6 +81,7 @@ constexpr uintptr_t FindGroundZ = 0x10AE5D0;     // float CWorld::FindGroundZFor
 constexpr uintptr_t GiveWeapon = 0x10D5B00;      // void CPed::GiveWeapon(CPed*, int type, int ammo)
 constexpr uintptr_t UpdateColours = 0x1175520;   // void (CVehicle*): pushes new paint to the renderer
 constexpr uintptr_t PedTypes = 0x504EAF0;        // CPedType* ms_apPedType[17], threat mask at +0x18
+constexpr uintptr_t VehiclePool = 0x53D74A8;     // CPool<CVehicle>*: objects, in-use flags, size
 } // namespace addr
 namespace off
 {
@@ -90,6 +94,9 @@ constexpr int WeaponCount = 13;
 constexpr uintptr_t VehHealth = 0x330, VehType = 0x3CC;
 constexpr uintptr_t MoveSpeed = 0x114, VehColour = 0x2A0;
 constexpr int BlipCount = 32, BlipStride = 0x30, BlipInUse = 0x23, BlipWaypoint = 0x2E;
+constexpr int VehSize = 0x7A0;
+// Bits SET_CAR_PROOFS sets in the flags at +0x6C: bullet, fire, explosion, collision, melee.
+constexpr uint32_t ProofBits = (1u << 24) | (1u << 25) | (1u << 17) | (1u << 26) | (1u << 27);
 } // namespace off
 constexpr int kChaosForStars[7] = {0, 60, 220, 420, 820, 1620, 3220};
 #endif
@@ -216,12 +223,9 @@ void RepairVehicleNow(void* veh)
 #endif
 }
 
-#if defined(GAME_VC)
 // Vehicle god mode also switches on the game's own proofs (what SET_CAR_PROOFS sets), so a single big hit such as
 // a rocket can't destroy the vehicle before its health is topped up again. The vehicle's own bits are put back
 // when god mode goes off or you leave it.
-constexpr uint32_t kProofBits = (1u << 25) | (1u << 26) | (1u << 17) | (1u << 27) | (1u << 28); // bullet, fire,
-                                                                                               // explosion, collision, melee
 void* g_proofVehicle = nullptr;
 uint32_t g_proofSaved = 0;
 
@@ -233,8 +237,8 @@ bool VehicleAlive(void* veh)
     int8_t* used = *reinterpret_cast<int8_t**>(pool + 8);
     int size = *reinterpret_cast<int*>(pool + 0x10);
     ptrdiff_t delta = (uint8_t*)veh - objects;
-    if (!objects || !used || delta < 0 || delta % 0x7B8) return false;
-    ptrdiff_t i = delta / 0x7B8;
+    if (!objects || !used || delta < 0 || delta % off::VehSize) return false;
+    ptrdiff_t i = delta / off::VehSize;
     return i < size && used[i] >= 0;
 }
 
@@ -245,7 +249,7 @@ void ProofsFrame(void* veh, bool want)
         if (VehicleAlive(g_proofVehicle))
         {
             uint32_t& flags = Field<uint32_t>(g_proofVehicle, 0x6C);
-            flags = (flags & ~kProofBits) | g_proofSaved;
+            flags = (flags & ~off::ProofBits) | g_proofSaved;
         }
         g_proofVehicle = nullptr;
     }
@@ -254,13 +258,12 @@ void ProofsFrame(void* veh, bool want)
         uint32_t& flags = Field<uint32_t>(veh, 0x6C);
         if (!g_proofVehicle)
         {
-            g_proofSaved = flags & kProofBits;
+            g_proofSaved = flags & off::ProofBits;
             g_proofVehicle = veh;
         }
-        flags |= kProofBits;
+        flags |= off::ProofBits;
     }
 }
-#endif
 
 // ---------- state ----------
 
@@ -532,9 +535,7 @@ void PerFrame()
         if (s.vehAutoRepair && hp < 1000.0f) RepairVehicleNow(veh);
         else if (s.vehGod && hp < 1000.0f) Field<float>(veh, off::VehHealth) = 1000.0f;
     }
-#if defined(GAME_VC)
     ProofsFrame(veh, s.vehGod);
-#endif
     if (s.freezeTime)
     {
         At<uint8_t>(addr::Hours) = (uint8_t)s.hour;
@@ -831,11 +832,7 @@ void VehicleMenu()
         snprintf(buf, sizeof(buf), "%.0f / 1000", Field<float>(veh, off::VehHealth));
         menu::Info("Vehicle health", buf);
     }
-#if defined(GAME_VC)
     menu::Toggle("Vehicle god mode", &s.vehGod, "Bullet, fire, explosion, crash and melee proof, health kept at 1000.");
-#else
-    menu::Toggle("Vehicle god mode", &s.vehGod, "Keeps engine health at 1000: no fire, no explosion.");
-#endif
     menu::Toggle("Auto-repair", &s.vehAutoRepair, "Repairs your vehicle whenever it takes damage.");
     if (menu::Action("Repair vehicle")) RepairVehicle();
     if (menu::Action("Flip upright")) FlipVehicle();

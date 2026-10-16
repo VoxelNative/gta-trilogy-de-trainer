@@ -54,6 +54,7 @@ constexpr uintptr_t RebuildPlayer = 0x103ADD0; // void CClothes::RebuildPlayer(C
 // unrelated flag toggles, which the menu used to flip by mistake (WeaponSetFlags).
 constexpr uintptr_t WeaponSets[3] = {0x107D600, 0x107D940, 0x107DC40};
 constexpr uintptr_t WeaponSetFlags = 0x572BD4B; // uint8[3]
+constexpr uintptr_t VehiclePool = 0x572B598;    // CPool<CVehicle>*: objects, in-use flags, size
 } // namespace addr
 
 namespace off
@@ -72,6 +73,10 @@ constexpr int StatMaxHealth = 24;
 constexpr float MaxHealthPerStat = 0.22f; // CPlayerInfo::Process: max health = STAT_MAX_HEALTH x 0.22, every frame
 constexpr int InfoNoTired = 0x180, InfoFastReload = 0x181, InfoFireproof = 0x182; // script-command perks
 constexpr int RadarTraceCount = 250, RadarTraceStride = 0x30;
+constexpr int VehSize = 0xDB8;
+// Bits SET_CAR_PROOFS sets in the physical flags at +0x78: bullet, fire, explosion, collision, melee.
+constexpr uintptr_t PhysicalFlags = 0x78;
+constexpr uint32_t ProofBits = (1u << 18) | (1u << 19) | (1u << 23) | (1u << 20) | (1u << 21);
 } // namespace off
 
 constexpr int kChaosForStars[7] = {0, 70, 200, 570, 1220, 2420, 4620};
@@ -259,6 +264,50 @@ struct Perk
 
 Perk g_sprint{off::InfoNoTired}, g_fastReload{off::InfoFastReload}, g_fireproof{off::InfoFireproof};
 
+// ---------- vehicle proofs ----------
+// Vehicle god mode also switches on the game's own proofs (what SET_CAR_PROOFS sets), so a single big hit such as
+// a rocket can't destroy the vehicle before its health is topped up again. The vehicle's own bits are put back
+// when god mode goes off or you leave it.
+
+void* g_proofVehicle = nullptr;
+uint32_t g_proofSaved = 0;
+
+bool VehicleAlive(void* veh)
+{
+    uint8_t* pool = At<uint8_t*>(addr::VehiclePool);
+    if (!pool || !veh) return false;
+    uint8_t* objects = *reinterpret_cast<uint8_t**>(pool);
+    int8_t* used = *reinterpret_cast<int8_t**>(pool + 8);
+    int size = *reinterpret_cast<int*>(pool + 0x10);
+    ptrdiff_t delta = (uint8_t*)veh - objects;
+    if (!objects || !used || delta < 0 || delta % off::VehSize) return false;
+    ptrdiff_t i = delta / off::VehSize;
+    return i < size && used[i] >= 0;
+}
+
+void ProofsFrame(void* veh, bool want)
+{
+    if (g_proofVehicle && (g_proofVehicle != veh || !want))
+    {
+        if (VehicleAlive(g_proofVehicle))
+        {
+            uint32_t& flags = Field<uint32_t>(g_proofVehicle, off::PhysicalFlags);
+            flags = (flags & ~off::ProofBits) | g_proofSaved;
+        }
+        g_proofVehicle = nullptr;
+    }
+    if (want && veh)
+    {
+        uint32_t& flags = Field<uint32_t>(veh, off::PhysicalFlags);
+        if (!g_proofVehicle)
+        {
+            g_proofSaved = flags & off::ProofBits;
+            g_proofVehicle = veh;
+        }
+        flags |= off::ProofBits;
+    }
+}
+
 // ---------- no-clip and waypoint teleport (game thread) ----------
 
 void* g_noclipEntity = nullptr;
@@ -408,7 +457,9 @@ void PerFrame()
             int& total = *reinterpret_cast<int*>(slot + off::WeaponTotal);
             if (*reinterpret_cast<int*>(slot) > 0 && total > 0 && total < 9000) total = 9999;
         }
-    if (void* veh = PlayerVehicle(ped))
+    void* veh = PlayerVehicle(ped);
+    ProofsFrame(veh, s.vehGod);
+    if (veh)
     {
         float& hp = Field<float>(veh, off::VehHealth);
         if (s.vehAutoRepair && hp < 1000.0f)
@@ -707,7 +758,7 @@ void VehicleMenu()
         snprintf(buf, sizeof(buf), "%.0f / 1000", Field<float>(veh, off::VehHealth));
         menu::Info("Vehicle health", buf);
     }
-    menu::Toggle("Vehicle god mode", &s.vehGod, "Keeps engine health at 1000: no fire, no explosion.");
+    menu::Toggle("Vehicle god mode", &s.vehGod, "Bullet, fire, explosion, crash and melee proof, health kept at 1000.");
     menu::Toggle("Auto-repair", &s.vehAutoRepair, "Fully repairs your vehicle (dents too) whenever it takes damage.");
     if (menu::Action("Repair vehicle")) RepairVehicle();
     if (menu::Action("Flip upright")) FlipVehicle();
