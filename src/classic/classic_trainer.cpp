@@ -39,6 +39,8 @@ constexpr uintptr_t RequestModel = 0x1182A50;   // void CStreaming::RequestModel
 constexpr uintptr_t LoadAllRequested = 0x11845A0; // void CStreaming::LoadAllRequestedModels(bool)
 constexpr uintptr_t UpdateColours = 0x11E2F50;  // void (CVehicle*): pushes new paint to the renderer
 constexpr uintptr_t ChangePlayerModel = 0x10A9930; // void (const char* modelName), used by the skin cheats
+constexpr uintptr_t FixAutomobile = 0x11B8730;  // void CAutomobile::Fix(CAutomobile*), what the Pay 'n' Spray calls
+constexpr uintptr_t VehiclePool = 0x545DE30;    // CPool<CVehicle>*: objects, in-use flags, size; 0x7B8 per vehicle
 constexpr uintptr_t ModelInfo = 0x517B170;      // CBaseModelInfo* ms_modelInfoPtrs[], name at +8
 constexpr uintptr_t PedTypes = 0x5123660;       // CPedType* ms_apPedType[17], threat mask at +0x18
 } // namespace addr
@@ -191,15 +193,74 @@ uint8_t* CheatFlag(unsigned rva)
 void RepairVehicleNow(void* veh)
 {
     Field<float>(veh, off::VehHealth) = 1000.0f;
-    if (Field<int>(veh, off::VehType) != 0) return; // only cars have the damage model
 #if defined(GAME_VC)
-    for (int i = 0; i < 5; i++) Field<uint8_t>(veh, 0x3E4 + i) = 0; // what the game's own health cheat resets
+    // Same as the Pay 'n' Spray: cars get the full fix (dents, parts, fire timer), bikes their own reset.
+    int type = Field<int>(veh, off::VehType);
+    if (type == 0)
+    {
+        Field<int>(veh, 0x710) = 0;
+        Fn<void (*)(void*)>(addr::FixAutomobile)(veh);
+    }
+    else if (type == 5)
+    {
+        Field<uint8_t>(veh, 0x317) &= 0xFD;
+        Field<uint8_t>(veh, 0x644) &= 0xBF;
+        Field<int>(veh, 0x654) = 0;
+        Field<uint16_t>(veh, 0x47C) = 0;
+    }
 #else
+    if (Field<int>(veh, off::VehType) != 0) return; // only cars have the damage model
     Field<uint8_t>(veh, 0x3DC) = 0;
     Field<int>(veh, 0x700) = 0;
     Fn<void (*)(void*)>(addr::FixAutomobile)(veh);
 #endif
 }
+
+#if defined(GAME_VC)
+// Vehicle god mode also switches on the game's own proofs (what SET_CAR_PROOFS sets), so a single big hit such as
+// a rocket can't destroy the vehicle before its health is topped up again. The vehicle's own bits are put back
+// when god mode goes off or you leave it.
+constexpr uint32_t kProofBits = (1u << 25) | (1u << 26) | (1u << 17) | (1u << 27) | (1u << 28); // bullet, fire,
+                                                                                               // explosion, collision, melee
+void* g_proofVehicle = nullptr;
+uint32_t g_proofSaved = 0;
+
+bool VehicleAlive(void* veh)
+{
+    uint8_t* pool = At<uint8_t*>(addr::VehiclePool);
+    if (!pool || !veh) return false;
+    uint8_t* objects = *reinterpret_cast<uint8_t**>(pool);
+    int8_t* used = *reinterpret_cast<int8_t**>(pool + 8);
+    int size = *reinterpret_cast<int*>(pool + 0x10);
+    ptrdiff_t delta = (uint8_t*)veh - objects;
+    if (!objects || !used || delta < 0 || delta % 0x7B8) return false;
+    ptrdiff_t i = delta / 0x7B8;
+    return i < size && used[i] >= 0;
+}
+
+void ProofsFrame(void* veh, bool want)
+{
+    if (g_proofVehicle && (g_proofVehicle != veh || !want))
+    {
+        if (VehicleAlive(g_proofVehicle))
+        {
+            uint32_t& flags = Field<uint32_t>(g_proofVehicle, 0x6C);
+            flags = (flags & ~kProofBits) | g_proofSaved;
+        }
+        g_proofVehicle = nullptr;
+    }
+    if (want && veh)
+    {
+        uint32_t& flags = Field<uint32_t>(veh, 0x6C);
+        if (!g_proofVehicle)
+        {
+            g_proofSaved = flags & kProofBits;
+            g_proofVehicle = veh;
+        }
+        flags |= kProofBits;
+    }
+}
+#endif
 
 // ---------- state ----------
 
@@ -464,12 +525,16 @@ void PerFrame()
             int& total = *reinterpret_cast<int*>(slot + 0xC);
             if (*reinterpret_cast<int*>(slot) > 0 && total > 0 && total < 9000) total = 9999;
         }
-    if (void* veh = PlayerVehicle(ped))
+    void* veh = PlayerVehicle(ped);
+    if (veh)
     {
         float hp = Field<float>(veh, off::VehHealth);
         if (s.vehAutoRepair && hp < 1000.0f) RepairVehicleNow(veh);
         else if (s.vehGod && hp < 1000.0f) Field<float>(veh, off::VehHealth) = 1000.0f;
     }
+#if defined(GAME_VC)
+    ProofsFrame(veh, s.vehGod);
+#endif
     if (s.freezeTime)
     {
         At<uint8_t>(addr::Hours) = (uint8_t)s.hour;
@@ -766,7 +831,11 @@ void VehicleMenu()
         snprintf(buf, sizeof(buf), "%.0f / 1000", Field<float>(veh, off::VehHealth));
         menu::Info("Vehicle health", buf);
     }
+#if defined(GAME_VC)
+    menu::Toggle("Vehicle god mode", &s.vehGod, "Bullet, fire, explosion, crash and melee proof, health kept at 1000.");
+#else
     menu::Toggle("Vehicle god mode", &s.vehGod, "Keeps engine health at 1000: no fire, no explosion.");
+#endif
     menu::Toggle("Auto-repair", &s.vehAutoRepair, "Repairs your vehicle whenever it takes damage.");
     if (menu::Action("Repair vehicle")) RepairVehicle();
     if (menu::Action("Flip upright")) FlipVehicle();
